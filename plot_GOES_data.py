@@ -28,7 +28,7 @@ import cftime
 import scipy.stats as stats # for Mann_whitney test
 from decimal import *
 
-
+domain = [-55.5,-52.0, 5.9, 8.0]
 path = '/home/j/Desktop/PROJ_WORK_Thesis/GOES_data/' # path to the GOES file are
 save_path='/home/j/Desktop/PROJ_WORK_Thesis/figures/GOES/' # path to save the image to
 
