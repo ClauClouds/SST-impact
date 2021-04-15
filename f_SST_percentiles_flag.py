@@ -124,7 +124,7 @@ matplotlib.rc('ytick', labelsize=labelsizeaxes)  # sets dimension of ticks
 ax.hist(sst, bins=10, color='red')
 ax.set_title('sst histogram for :'+string_out, fontsize=fontSTitle, loc='left')
 ax.set_xlabel("sst [$^\circ$C]", fontsize=fontSizeX)
-ax.set_ylabel("occurrences [$\%$]", fontsize=fontSizeY)
+ax.set_ylabel("occurrences [#]", fontsize=fontSizeY)
 fig.tight_layout()
 fig.savefig(path_fig+string_out+'_sst_histogram.png', format='png')
 
