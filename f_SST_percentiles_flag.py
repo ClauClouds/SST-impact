@@ -17,6 +17,19 @@ import netCDF4 as nc4
 import numpy as np
 import xarray as xr
 from datetime import datetime
+import matplotlib.dates as mdates
+
+def f_closest(array,value):
+    '''
+    # closest function
+    #---------------------------------------------------------------------------------
+    # date :  16.10.2017
+    # author: Claudia Acquistapace
+    # goal: return the index of the element of the input array that in closest to the value provided to the function
+    '''
+    import numpy as np
+    idx = (np.abs(array-value)).argmin()
+    return idx  
 
 # set the processing mode keyword for the data you want to be processed
 processing_mode = 'case_study' #  'all_campaign' #
@@ -24,6 +37,7 @@ processing_mode = 'case_study' #  'all_campaign' #
 # set percentiles values to use
 perc_vals = [10, 90] #  'all_campaign' #
 perc_string = str(perc_vals)[1:3]+'_'+str(perc_vals)[5:7]
+
 
 # paths and filenames
 ship_data = "/Volumes/Extreme SSD/ship_motion_correction_merian/ship_data/new/"
@@ -33,6 +47,10 @@ SST_impact_work/plots/"
 path_out = "/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/\
 SST_impact_work/"
 
+
+#%%
+        
+    
 # opening ship data and reading sst
 dataset = xr.open_dataset(ship_data+ship_file)
 
@@ -47,26 +65,23 @@ else:
     t_end = datetime(2020, 2, 19, 23, 59, 59)
 
 # slicing dataset for the selected time interval and extracting sst
-slice = dataset.sel(time=slice(t_start, t_end))
-sst = slice['SST'].values
-time_sst = slice['time'].values
+sliced_ds = dataset.sel(time=slice(t_start, t_end))
+sst = sliced_ds['SST'].values
+time_sst = sliced_ds['time'].values
 
-print('max sst ', np.nanmax(sst))
-print('min sst ', np.nanmin(sst))
 
-# calculating sst distribution and percentiles
-percentiles_sst = np.nanpercentile(sst, perc_vals)
-print('sst percentiles {}'.format(percentiles_sst))
+# ccalculating 10th percentile
+perc_10th = np.percentile(sst, 10.)
+perc_90th = np.percentile(sst, 90.)
 
-# selecting values of sst corresponding to percentiles thresholds of min and
-# max percentiles to use as thresholds
-perc_low = percentiles_sst[0]
-perc_high = percentiles_sst[-1]
 
 # finding indeces of sst values smaller than sst_perc_low and sst_perc_high
-i_sst_low = np.where(sst <= perc_low)[0]
-i_sst_high = np.where(sst >= perc_high)[0]
+i_sst_low = np.where(sst < perc_10th)[0]
+i_sst_high = np.where(sst >= perc_90th)[0]
 
+
+print(len(i_sst_low), len(i_sst_high))
+#%%
 # generating flag to identify the sst < thr_low ( flag == 1) and sst > trh_high
 # flag == 2.
 print(len(sst[i_sst_low]))
@@ -77,13 +92,13 @@ flag_arr[i_sst_high] = 2
 
 
 # plotting sst histogram and sst flag obtained from sst time serie
-labelsizeaxes = 12
-fontSTitle = 12
-fontSizeX = 12
-fontSizeY = 12
-cbarAspect = 10
-fontSizeCbar = 12
-fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12, 6))
+labelsizeaxes = 25
+fontSTitle = 25
+fontSizeX = 25
+fontSizeY = 25
+cbarAspect = 25
+fontSizeCbar = 25
+fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(14, 8))
 rcParams['font.sans-serif'] = ['Tahoma']
 matplotlib.rcParams['savefig.dpi'] = 100
 plt.gcf().subplots_adjust(bottom=0.15)
@@ -93,40 +108,33 @@ ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 ax.get_xaxis().tick_bottom()
 ax.get_yaxis().tick_left()
+ax.spines["bottom"].set_linewidth(2)
+ax.spines["left"].set_linewidth(2)
+ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %H'))
+
+ax.tick_params(which='minor', length=7, width=3)
+ax.tick_params(which='major', length=7, width=3)
 matplotlib.rc('xtick', labelsize=labelsizeaxes)  # sets dimension of ticks
 matplotlib.rc('ytick', labelsize=labelsizeaxes)  # sets dimension of ticks
 ax.scatter(time_sst, flag_arr, color='red', marker = 'o')
 ax.set_ylim([0., 2.])
 ax2 = ax.twinx()
+ax2.spines["top"].set_visible(False)
+#ax2.spines["right"].set_visible(False)
+ax2.xaxis.set_major_formatter(mdates.DateFormatter('%d %H'))
+
 ax2.set_ylim([26., 28.])
+ax2.set_ylabel('SST [$^{\circ}$C]', fontsize=fontSizeX)
 ax2.plot(time_sst,  sst, color='blue')
-ax2.axhline(perc_low, 0., 1, color='black', linestyle=':')
-ax2.axhline(perc_high, 0., 1, color='green', linestyle=':')
+ax2.axhline(perc_10th, 0., 1, color='black', linestyle=':', label="10th percentile")
+ax2.axhline(perc_90th, 0., 1, color='green', linestyle=':', label="90th percentile")
 ax.set_title('time series of sst and flag for: '+string_out, fontsize=fontSTitle, loc='left')
-ax.set_xlabel("time ", fontsize=fontSizeX)
+ax.set_xlabel("time [dd hh]", fontsize=fontSizeX)
 ax.set_ylabel("flag []", fontsize=fontSizeY)
+ax2.legend(frameon=False, fontsize=fontSizeX)
 fig.tight_layout()
 fig.savefig(path_fig+string_out+'_sst_flag_'+perc_string+'_perc.png', format='png')
 
-
-fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(12, 6))
-rcParams['font.sans-serif'] = ['Tahoma']
-matplotlib.rcParams['savefig.dpi'] = 100
-plt.gcf().subplots_adjust(bottom=0.15)
-fig.tight_layout()
-ax = plt.subplot(1, 1, 1)
-ax.spines["top"].set_visible(False)
-ax.spines["right"].set_visible(False)
-ax.get_xaxis().tick_bottom()
-ax.get_yaxis().tick_left()
-matplotlib.rc('xtick', labelsize=labelsizeaxes)  # sets dimension of ticks
-matplotlib.rc('ytick', labelsize=labelsizeaxes)  # sets dimension of ticks
-ax.hist(sst, bins=10, color='red')
-ax.set_title('sst histogram for :'+string_out, fontsize=fontSTitle, loc='left')
-ax.set_xlabel("sst [$^\circ$C]", fontsize=fontSizeX)
-ax.set_ylabel("occurrences [#]", fontsize=fontSizeY)
-fig.tight_layout()
-fig.savefig(path_fig+string_out+'_sst_histogram.png', format='png')
 
 # saving flag, sst, and time array of the slice in ncdf
 dims = ['time']
