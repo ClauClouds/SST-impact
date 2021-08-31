@@ -75,15 +75,74 @@ path_RS = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/radiosond
 file_list_RS = np.sort(glob.glob(path_RS+'EUREC4A_Atalante_Meteomodem-RS_L1-*.nc'))
 #np.sort(glob.glob(path_files+'*.nc'))
 
+# calculating total number of soundings
+n_soundings = len(file_list_RS)
 
-data_RS = xr.open_mfdataset(file_list_RS)
+DS_list = []
 
-print(data_RS)
+for ind_file in range(n_soundings):
 
+    # reading data from file
+    data_RS = xr.open_dataset(file_list_RS[ind_file])
+
+    # dropping pressure duplicates
+    DS = data_RS.to_dataframe()
+    DS_clean = DS.drop_duplicates('p', keep='first')
+    data_RS = xr.Dataset.from_dataframe(DS_clean)
+
+    # defining pressure and height grid for the first file
+    if ind_file == 0:
+        # building pressure grid fro all data
+        pressure = data_RS.p.values[:,0]
+        pressure_grid = np.arange(data_RS.p.values[0,0], data_RS.p.values[-1,0], -20.)
+
+        # calculating corresponding height array based on the conversion formula
+        height = []
+        for ind_p in range(len(pressure_grid)):
+            height.append(pres2alt(pressure_grid[ind_p]))
+
+    # removing values smaller than maxima at the surface
+    if np.argmax(pressure) !=0:
+        data_RS = data_RS.sel(level=slice(np.argmax(pressure), data_RS.level.values[-1]))
+        print('cut profile ')
+
+    # assigning vertical coordinate to radiosonde data based on conversion formula from pressure
+    data_RS_good = data_RS.assign_coords({'level':data_RS.p.values[:,0]})
+
+    # interpolating the pressure on the pressure equidistant levels and the fixed height
+    data_RS_interp = data_RS_good.reindex(level=pressure_grid, method='nearest')
+
+    # adding data to list
+    DS_list.append(data_RS_interp)
+
+print(len(DS_list))
+strasuka
 fig, ax = plt.subplots()
 # set here the variable from ds to plot, its color map and its min and max values
-data_RS.rh.plot(y='p')
+#plt.plot(data_RS.rh.values[:,0], data_RS.p.values[:,0], color='blue', label='original')
+#plt.plot(data_RS_good.rh.values[:,0], data_RS_good.p.values[:,0], color='red', label='p')
+plt.plot(data_RS_interp.rh.values[:,0], height, color='green', label='interp')
 ax.set_title("relative humidity profile : ")
 #ax.set_xlim(time_min, time_max)
 #ax.set_ylim(0, 4500);
+ax.legend()
 fig.savefig(path_RS+'rh_profile.png', format='png')
+
+fig, ax = plt.subplots()
+plt.plot(data_RS_good.p.values[:,0])
+fig.savefig(path_RS+'P-original.png', format='png')
+
+fig, ax = plt.subplots()
+plt.plot(data_RS_interp.p.values[:,0])
+fig.savefig(path_RS+'P-interp.png', format='png')
+strasuka
+
+#V_windS_hour = V_windS_hour.interp(height=heightRad)
+
+#data_RS = data_RS.assign_coords({"height": height_grid})
+
+print(data_RS)
+
+#data_RS['height'] = height
+print(np.ediff1d(height))
+print(height[0][0], height[0][-1])
