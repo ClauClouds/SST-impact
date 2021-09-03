@@ -16,133 +16,855 @@ import xarray as xr
 from datetime import datetime
 import matplotlib.dates as mdates
 import glob
-
+from myFunctions import lcl
+from myFunctions import f_closest
 from warnings import warn
 import numpy as np
 import pandas as pd
-
-"""
-The ``atmosphere`` module contains methods to calculate relative and
-absolute airmass and to determine pressure from altitude or vice versa.
-"""
-
-APPARENT_ZENITH_MODELS = ('simple', 'kasten1966', 'kastenyoung1989',
-                          'gueymard1993', 'pickering2002')
-TRUE_ZENITH_MODELS = ('youngirvine1967', 'young1994')
-AIRMASS_MODELS = APPARENT_ZENITH_MODELS + TRUE_ZENITH_MODELS
-
-def pres2alt(pressure):
-    '''
-    Determine altitude from site pressure.
-
-    Parameters
-    ----------
-    pressure : numeric
-        Atmospheric pressure. [Pa]
-
-    Returns
-    -------
-    altitude : numeric
-        Altitude above sea level. [m]
-
-    Notes
-    ------
-    The following assumptions are made
-
-    ============================   ================
-    Parameter                      Value
-    ============================   ================
-    Base pressure                  101325 Pa
-    Temperature at zero altitude   288.15 K
-    Gravitational acceleration     9.80665 m/s^2
-    Lapse rate                     -6.5E-3 K/m
-    Gas constant for air           287.053 J/(kg K)
-    Relative Humidity              0%
-    ============================   ================
-
-    References
-    -----------
-    .. [1] "A Quick Derivation relating altitude to air pressure" from
-       Portland State Aerospace Society, Version 1.03, 12/22/2004.
-    '''
-
-    alt = 44331.5 - 4946.62 * pressure ** (0.190263)
-
-    return alt
-
+import atmos
+import datetime as dt
 
 path_RS = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/radiosondes_atalante/case_1/'
-file_list_RS = np.sort(glob.glob(path_RS+'EUREC4A_Atalante_Meteomodem-RS_L1-*.nc'))
-#np.sort(glob.glob(path_files+'*.nc'))
 
+# reading cloud base time series from ceilometer atalante
+ceilofiles = np.sort(glob.glob('/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/ceilometer_atalante/*000.nc'))
+ceilometer = xr.open_mfdataset(ceilofiles)
+
+# reading radiosondes
+file_list_RS = np.sort(glob.glob(path_RS+'*.nc'))
+#np.sort(glob.glob(path_files+'*.nc'))
 # calculating total number of soundings
 n_soundings = len(file_list_RS)
+print('total number of soundings : ',n_soundings)
 
-DS_list = []
+# re-ordering files in temporal order
+sounding_id = []
+for ind_file in range(n_soundings):
+    data_RS = xr.open_dataset(file_list_RS[ind_file])
+    sounding_id.append(data_RS.sounding.values[0][-12:])
+    #print(sounding_id[ind_file][0][-6:-4])
+    #print(sounding_id[ind_file][0][-4:])
+
+# re-ordering and saving order of indeces in ind_sorted
+soundings_strings_sorted = np.sort(sounding_id)
+ind_sorted = np.argsort(sounding_id)
+
+# building legend strings
+legend_string = []
+for ind_file in range(n_soundings):
+    #print(soundings_strings_sorted[ind_file])
+    legend_string.append(soundings_strings_sorted[ind_file][-6:-4]+' - '+soundings_strings_sorted[ind_file][-4:-2]+':'+soundings_strings_sorted[ind_file][-2:]+'UTC')
+
+# assigning vertical dimension larger than all number of levels of the sondes
+dim_height = 7000
+
+# defining matrices of data
+wvmr = np.zeros((n_soundings, dim_height))
+p = np.zeros((n_soundings, dim_height))
+rh = np.zeros((n_soundings, dim_height))
+ta = np.zeros((n_soundings, dim_height))
+wdir = np.zeros((n_soundings, dim_height))
+wspd = np.zeros((n_soundings, dim_height))
+lat = np.zeros((n_soundings, dim_height))
+lon = np.zeros((n_soundings, dim_height))
+height = np.zeros((n_soundings, dim_height))
+
+flight_time = np.zeros((n_soundings, dim_height))
+wvmr.fill(np.nan)
+p.fill(np.nan)
+rh.fill(np.nan)
+ta.fill(np.nan)
+wdir.fill(np.nan)
+wspd.fill(np.nan)
+lat.fill(np.nan)
+lon.fill(np.nan)
+flight_time.fill(np.nan)
+
+# reading data in
+for ind_file, index in enumerate(ind_sorted):
+    # reading string for filename to read
+    #str_file = soundings_strings_sorted[ind_file]
+    #file_name = glob.glob(path_RS+'*_'+str_file+'_v3.0.0.nc')
+    #print(file_name)
+    #suka
+    # reading data from file
+    data_RS = xr.open_dataset(file_list_RS[index])
+    dim_sounding = len(data_RS.p.values[0,:])
+    wvmr[ind_file,0:dim_sounding] = data_RS.mr.values[0,:]
+    p[ind_file,0:dim_sounding] = data_RS.p.values[0,:]
+    rh[ind_file,0:dim_sounding] = data_RS.rh.values[0,:]
+    ta[ind_file,0:dim_sounding] = data_RS.ta.values[0,:]
+    wdir[ind_file,0:dim_sounding] = data_RS.wdir.values[0,:]
+    wspd[ind_file,0:dim_sounding] = data_RS.wspd.values[0,:]
+    lat[ind_file,0:dim_sounding] = data_RS.lat.values[0,:]
+    lon[ind_file,0:dim_sounding] = data_RS.lon.values[0,:]
+    flight_time[ind_file,0:dim_sounding] = data_RS.flight_time.values[0,:]
+    sounding_id.append(data_RS.sounding.values)
+    height[ind_file,0:dim_sounding] = data_RS.alt.values[0,:]
+
+# plot multipanel with all profiles
+colors_soundings = plt.cm.brg(np.linspace(0, 1, n_soundings))
+
+# composite figure for Wband and MRR data together
+fig, axs = plt.subplots(3, 2, figsize=(24,20), constrained_layout=True)
+grid = True
+matplotlib.rc('xtick', labelsize=36)  # sets dimension of ticks in the plots
+matplotlib.rc('ytick', labelsize=36) # sets dimension of ticks in the plots
+
+labelsizeaxes   = 26
+fontSizeTitle   = 26
+fontSizeX       = 26
+fontSizeY       = 26
+cbarAspect      = 26
+fontSizeCbar    = 26
+import custom_color_palette as ccp
+from matplotlib import rcParams
+import matplotlib.ticker as ticker
+
+text_x = np.concatenate((np.repeat(0.75, 20), np.repeat(0.9,20)))
+text_y = np.concatenate((np.arange(1,0,-0.05), np.arange(1,0,-0.05)))
+  # sets dimension of ticks in the plots
+# plotting W-band radar variables and color bars
+for ind_file in range(n_soundings):
+    #plot p
+    axs[0,0].plot(p[ind_file,:]/100., height[ind_file,:], color=colors_soundings[ind_file], linestyle=':', rasterized=True)
+    axs[0,0].set_xlim(650.,1030.)
+    axs[0,0].text(text_x[ind_file], text_y[ind_file], legend_string[ind_file], color=colors_soundings[ind_file], fontsize=14, horizontalalignment='center', verticalalignment='center', transform=axs[0,0].transAxes)
+    #plot t
+    axs[1,0].plot(ta[ind_file,:], height[ind_file,:], color=colors_soundings[ind_file], linestyle=':', rasterized=True)
+    axs[1,0].set_xlim(280.,300.)
+    #plot rh
+    axs[2,0].plot(rh[ind_file,:]*100, height[ind_file,:], color=colors_soundings[ind_file], linestyle=':', rasterized=True)
+    #plot wdir
+    axs[0,1].plot(wdir[ind_file,:], height[ind_file,:], color=colors_soundings[ind_file], linestyle=':', rasterized=True)
+    axs[1,1].set_xlim(0.,20.)
+    #plot wspd
+    axs[1,1].plot(wspd[ind_file,:], height[ind_file,:], color=colors_soundings[ind_file], linestyle=':', rasterized=True)
+    axs[0,1].set_xlim(0.,200.)
+    #plot lat/lon
+    axs[2,1].scatter(lon[ind_file,:], lat[ind_file,:], s=20, marker='o', color=colors_soundings[ind_file], linestyle=':', rasterized=True)
+
+
+for ax, l in zip(axs[:,0].flatten(), ['(a) Pressure (HPa)',  '(b) Temperature [K]', '(c) Relative Humidity [%]']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=20, transform=ax.transAxes)
+    #ax.
+    ax.set_ylabel('Height [m]', fontsize=fontSizeX)
+    ax.set_ylim(100., 4500.)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_linewidth(3)
+    ax.spines["left"].set_linewidth(3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=3))
+    ax.tick_params(which='minor', length=7, width=3)
+    ax.tick_params(which='major', length=7, width=3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=3))
+    ax.tick_params(axis='both', labelsize=26)
+
+
+count = 0
+
+
+for ax, l in zip(axs[:,1].flatten(), ['(d) Wind Direction [$^{\circ}$]',  '(e) Wind speed [ms$^{-1}$]', '(f) Lat/Lon [$^{\circ}$]']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=20, transform=ax.transAxes)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_linewidth(3)
+    ax.spines["left"].set_linewidth(3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=3))
+    ax.tick_params(which='minor', length=7, width=3)
+    ax.tick_params(which='major', length=7, width=3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=3))
+    ax.tick_params(axis='both', labelsize=26)
+
+    if (count <= 1):
+        ax.set_ylabel('Height [m]', fontsize=fontSizeX)
+        ax.set_ylim(100., 4500.)
+    else:
+        ax.set_xlabel('Longitude [$^{\circ}$]', fontsize=fontSizeX)
+        #ax.set_ylim(0., 2500.)
+        ax.set_ylabel('Latitude [$^{\circ}$]', fontsize=fontSizeX)
+    count=count+1
+
+fig.savefig(path_RS+'Figure_sounding_variables.png')
+
+
+
+# calculating thermodinamic Parameters
+
+
+# ---- calculating LCL height
+#------ calculating LCL heights from tower measurements resampled
+# important: provide pressure in Pascals, T in K, RH in 70.3
+#---------------------------------------------------------------------------------
+z_lcl = np.zeros((n_soundings))
+z_lcl.fill(np.nan)
+for ind_file in range(n_soundings):
+    p_col = p[ind_file, :]
+    t_col = ta[ind_file, :]
+    rh_col = rh[ind_file, :]
+    z_lcl[ind_file] = round(lcl(np.array(p_col[0]),np.array(t_col[0]),np.array(rh_col[0])), 2)
+#print(z_lcl)
+
+
+# ------------------------------------------------------------------
+# calculate LTS index for lower tropospheric stability (Wood and Bretherton, 2006), potential and virtual potential temperature
+# ------------------------------------------------------------------
+Pthr = 700 * 100. # Pressure level of 700 Hpa used as a reference in Pa
+LTS = np.zeros((n_soundings))
+theta_matrix = np.zeros((n_soundings, dim_height))
+theta_v_matrix = np.zeros((n_soundings, dim_height))
+theta_matrix.fill(np.nan)
+theta_v_matrix.fill(np.nan)
+PBLheight = np.zeros((n_soundings))
+EIS = np.zeros((n_soundings))
+
+
+theta_700 = np.zeros((n_soundings))
+theta_Surf = np.zeros((n_soundings))
+
+
+for ind_file in range(n_soundings):
+    p_col = p[ind_file, :]
+    t_col = ta[ind_file, :]
+    rh_col = rh[ind_file, :]
+    h_col = height[ind_file,:]
+    wvmr_col = wvmr[ind_file, :]
+    wspd_col = wspd[ind_file, :]
+    wdir_col = wdir[ind_file, :]
+
+
+    # ------------------------------------------------------------------------------
+    # calculating PBL height
+    # ------------------------------------------------------------------------------
+    g = 9.8                                                # gravity constant
+    Rithreshold = 0.25                                     # Threshold values for Ri
+    Rithreshold2 = 0.2
+    Ri = np.zeros((dim_height))                       # Richardson number matrix
+    PBLheightArr = []
+    RiCol = np.zeros((dim_height))
+
+    # calculating richardson number matrix using the bulk Ri method for radiosondes (https://agupubs.onlinelibrary.wiley.com/doi/10.1029/2012JD018143)
+    # calculating pressure level at free troposphere
+    indP700 = np.where(p_col >= Pthr)[0][-1]
+
+    # calculating potential temperature in K
+    theta = []
+    Cp = 1004.
+    Rl = 287.
+    for ind in range(len(p_col)):
+        theta.append(t_col[ind]*((100000./(p_col[ind]))**(Rl/Cp)))
+    theta_matrix[ind_file,:] = np.asarray(theta)
+
+    # calculating LTS index for the profile
+    LTS[ind_file] = (theta[indP700] - theta[0])
+
+    theta_700[ind_file] = theta[indP700]
+    theta_Surf[ind_file] = theta[0]
+
+    # calculating profiles of virtual potential temperature
+    Theta_v = []
+    Rd = 287.058  # gas constant for dry air [Kg-1 K-1 J]
+    for indHeight in range(len(p_col)):
+        k = Rd*(1-0.23*wvmr_col[indHeight])/Cp
+        Tv =  (1 + 0.61*wvmr_col[indHeight])*t_col[indHeight] # calculation of virtual temperature with approximated formula
+
+        Theta_v.append( (1 + 0.61 * wvmr_col[indHeight]) * t_col[indHeight] * (1000./(p_col[indHeight]/100.))**k)
+    theta_v_matrix[ind_file,:] = np.asarray(Theta_v)
+
+
+    # defining surface variables that are needed to calculate Ri
+    thetaS = theta_v_matrix[ind_file, 0]
+    #print(np.shape(theta_v_matrix))
+
+    zs = h_col[0]                                         # height of the surface reference
+    u_s = - wspd_col[0] * np.sin(wdir_col[0])
+    v_s = - wspd_col[0] * np.cos(wdir_col[0])
+    #print(thetaS, zs, u_s, v_s)
+    # calculation of wind componends
+    for iHeight in range(dim_height):
+
+        # calculating denominator
+        # 1_calculating wind components using formulas from https://confluence.ecmwf.int/pages/viewpage.action?pageId=133262398
+        u_col = - wspd_col[iHeight] * np.sin(wdir_col[iHeight])
+        v_col = - wspd_col[iHeight] * np.cos(wdir_col[iHeight])
+        den = (u_col-u_s)**2 + (v_col-v_s)**2
+        if den == 0:
+            Ri[iHeight] = 0.
+        else:
+            Ri[iHeight] = (1/den) * (g/thetaS) * (theta_v_matrix[ind_file,iHeight]-thetaS)*(h_col[iHeight]-zs)
+
+    # find index in height where Ri > Rithreshold
+    RiCol = Ri[:]
+    #print(RiCol)
+    #print(np.where(RiCol > Rithreshold2)[0][:])
+    #print(len(np.where(RiCol > Rithreshold)[0][:]))
+    if len(np.where(RiCol > Rithreshold)[0][:]) != 0:
+        PBLheight[ind_file] = h_col[np.where(RiCol > Rithreshold)[0][0]]
+        #print('pbl height = ',h_col[np.where(RiCol > Rithreshold)[0][0]])
+    else:
+        PBLheight[ind_file] = 0.
+        #print('pbl height = ',0)
+
+    #------------------------------------------------------------------
+    # calculate EIS index for lower tropospheric stability (Wood and Bretherton, 2006) for observations
+    # ------------------------------------------------------------------
+    g = 9.8 # gravitational constant [ms^-2]
+    Cp = 1005.7 # specific heat at constant pressure of air [J K^-1 Kg^-1]
+    Lv = 2.50 * 10**6 # latent heat of vaporization ( or condensation ) of water [J/kg] or entalphy
+    R = 8.314472 # gas constant for dry air [J/ molK]
+    epsilon = 0.622 # ratio of the gas constants of dry air and water vapor
+    gamma_d = g / Cp    # dry adiabatic lapse rate in K/m
+    Rv = 461.5 # gas constant for water vapor [J/(Kg K)]
+    Rd = 287.047  # gas constant for dry air  [J/(Kg K)]
+    # calculating saturation vapor Pressure in Pa
+    e0                 = 611 # pa
+    T0                 = 273.15 # K
+    es                 = np.zeros((dim_height))
+    for ind_height in range(dim_height):
+        es[ind_height] = (e0 * np.exp(Lv/Rv*(T0**(-1)-t_col[ind_height]**(-1))))
+
+    # ---- calculating saturation mixing ratio
+    ws = np.zeros((dim_height))#mpcalc.saturation_mixing_ratio(P, T)
+    ws.fill(np.nan)
+    for indHeight in range(dim_height):
+        ws[indHeight] = (epsilon * (es[indHeight]/(p_col[indHeight] - es[indHeight]))) # saturation water vapor mixing ratio kg/Kg
+
+    # calculation of adiabatic moist gradient
+    gamma_moist = np.zeros((dim_height))
+
+    # calculating moist adiabatic lapse rate
+    for indHeight in range(len(height)):
+        num = 1 + (Lv * ws[indHeight])/ (Rd * t_col[indHeight])
+        den = 1 + (Lv**2 * ws[indHeight])/ (Rv * Cp * t_col[indHeight]**2)
+        gamma_moist[indHeight] = gamma_d * (num / den)
+
+    # calculating moist gradient and the height of the free troposphere level at 700 Hpa
+    gamma_moist_700 = gamma_moist[indP700]
+    z_700 = h_col[indP700]
+
+    # finding closest radiosonde observation to lcl and calculating moist adiabatic lapse rate there
+    ind_lcl = f_closest(h_col, z_lcl[ind_file])
+    gamma_lcl = gamma_moist[ind_lcl]
+
+    # calculating EIS using formula from Wood and Bretherton, 2006 https://doi.org/10.1175/JCLI3988.1
+    #EIS.append(LTS - gamma_moist_700*z_700 + gamma_lcl*z_lcl[ind_file])
+    EIS[ind_file] = (theta[indP700] - theta[0]) - gamma_moist[indP700]*z_700 + gamma_moist[ind_lcl]*z_lcl[ind_file]
+    #print('EIS obtained from the Wood and Bretherton formula:')
+
+
+
+
+# composite figure for potential temperature and virtual potential temperature
+fig, axs = plt.subplots(1, 2, figsize=(12,8), sharey=True, constrained_layout=True)
+grid = True
+matplotlib.rc('xtick', labelsize=36)  # sets dimension of ticks in the plots
+matplotlib.rc('ytick', labelsize=36) # sets dimension of ticks in the plots
+labelsizeaxes   = 26
+fontSizeTitle   = 26
+fontSizeX       = 26
+fontSizeY       = 26
+cbarAspect      = 26
+fontSizeCbar    = 26
+
+import custom_color_palette as ccp
+from matplotlib import rcParams
+import matplotlib.ticker as ticker
+
+for ind_file in range(n_soundings):
+    #plot p
+    axs[0].plot(theta_matrix[ind_file,:], height[ind_file,:], color=colors_soundings[ind_file], linestyle=':', rasterized=True)
+    axs[0].set_xlim(290.,325.)
+    axs[0].set_ylabel('Height [m]', fontsize=fontSizeX)
+
+    #axs[0].text(text_x[ind_file], text_y[ind_file], legend_string[ind_file], color=colors_soundings[ind_file], fontsize=14, horizontalalignment='center', verticalalignment='center', transform=axs[0].transAxes)
+    #plot t
+    axs[1].plot(theta_v_matrix[ind_file,:], height[ind_file,:], color=colors_soundings[ind_file], linestyle=':', rasterized=True)
+    axs[1].set_xlim(300.,325.)
+    #plot rh
+
+for ax, l in zip(axs[:].flatten(), ['(a) Potential temperature (K)',  '(b) Virtual potential temperature [K]']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=20, transform=ax.transAxes)
+    #ax.
+    ax.set_ylim(100., 4500.)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_linewidth(3)
+    ax.spines["left"].set_linewidth(3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(which='minor', length=5, width=2)
+    ax.tick_params(which='major', length=7, width=3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(axis='both', labelsize=26)
+
+fig.savefig(path_RS+'Figure_theta_theta_v.png')
+
+
+# reading tsg file
+tsg_file = "/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/tsg_sst_data/tsg/nc/msm_089_1_tsg.nc"
+
+# opening ship data and reading sst
+tsg_data = xr.open_dataset(tsg_file)
+
+
+# identifying time stamps of sst corresponding to time stamps of radiosondes
+t_start = datetime(2020, 2, 2, 0, 0, 0)
+t_end = datetime(2020, 2, 3, 23, 59, 59)
+
+# slicing tsg datase t for the selected time interval and extracting sst
+sliced_tsg_ds = tsg_data.sel(TIME=slice(t_start, t_end))
+tsg_sst = sliced_tsg_ds['TEMP'].values
+tsg_time_sst = sliced_tsg_ds['TIME'].values
+tsg_flag = sliced_tsg_ds['TEMP_QC'].values
+
+
+print(sliced_tsg_ds)
+
+# averaging together the sst of the different sst sensors for tsg
+temp0 = sliced_tsg_ds.TEMP[:,0].values
+temp1 = sliced_tsg_ds.TEMP[:,1].values
+sst_tsg = temp0
+sst_tsg[np.isnan(temp0)] = temp1[np.isnan(temp0)]
+
+# reading radiosonde time array
+datetime_RS = []
+tsg_datetime_RS = []
+tsg_sst_0_RS = []
+tsg_sst_1_RS = []
+cc = []
+cb_arr = []
 
 for ind_file in range(n_soundings):
 
-    # reading data from file
-    data_RS = xr.open_dataset(file_list_RS[ind_file])
+    # reading launching time from string
+    dd = legend_string[ind_file][0:2]
+    hh = legend_string[ind_file][5:7]
+    mm = legend_string[ind_file][8:10]
+    #print(dd,hh,mm)
+    datetime_RS.append(datetime(2020, 2, int(dd), int(hh), int(mm), 0))
+    #print(datetime(2020, 2, int(dd), int(hh), int(mm), 0))
 
-    # dropping pressure duplicates
-    DS = data_RS.to_dataframe()
-    DS_clean = DS.drop_duplicates('p', keep='first')
-    data_RS = xr.Dataset.from_dataframe(DS_clean)
+    # selecting closest time in tsg
+    tsg_sel = sliced_tsg_ds.sel(TIME=datetime(2020, 2, int(dd), int(hh), int(mm), 0), method='nearest')
 
-    # defining pressure and height grid for the first file
-    if ind_file == 0:
-        # building pressure grid fro all data
-        pressure = data_RS.p.values[:,0]
-        pressure_grid = np.arange(data_RS.p.values[0,0], data_RS.p.values[-1,0], -20.)
+    #print(pd.to_datetime(tsg_sel.TIME.values))
+    tsg_datetime_RS.append(pd.to_datetime(tsg_sel.TIME.values))
+    #print(tsg_sel.TEMP[0].values, tsg_sel.TEMP[0].values, tsg_sel.TEMP[1].values)
+    tsg_sst_0_RS.append(tsg_sel.TEMP[0].values)
 
-        # calculating corresponding height array based on the conversion formula
-        height = []
-        for ind_p in range(len(pressure_grid)):
-            height.append(pres2alt(pressure_grid[ind_p]))
 
-    # removing values smaller than maxima at the surface
-    if np.argmax(pressure) !=0:
-        data_RS = data_RS.sel(level=slice(np.argmax(pressure), data_RS.level.values[-1]))
-        print('cut profile ')
+    # calculating cloud base cloud fraction around the time stamp selected
+    time_int_start = datetime(2020, 2, int(dd), int(hh), int(mm), 0) - dt.timedelta(minutes=7)
+    time_int_end = datetime(2020, 2, int(dd), int(hh), int(mm), 0) + dt.timedelta(minutes=7)
+    # selecting cloud bases counted in the 30 min around the selected time
+    ceilo_slice = ceilometer.sel(time=slice(time_int_start, time_int_end))
+    # count number of values that are not nan
+    cb = ceilo_slice.cbh.values[:,0]
+    cb = cb.astype('float')
+    cb[cb == -1] = np.nan
+    n_clouds = np.count_nonzero(~np.isnan(cb))
+    cc.append(n_clouds/len(cb))
+    cb_arr.append(np.nanmean(cb))
 
-    # assigning vertical coordinate to radiosonde data based on conversion formula from pressure
-    data_RS_good = data_RS.assign_coords({'level':data_RS.p.values[:,0]})
+tsg_sst_0_RS = np.asarray(tsg_sst_0_RS)
+sst_tsg_RS = tsg_sst_0_RS
 
-    # interpolating the pressure on the pressure equidistant levels and the fixed height
-    data_RS_interp = data_RS_good.reindex(level=pressure_grid, method='nearest')
 
-    # adding data to list
-    DS_list.append(data_RS_interp)
 
-print(len(DS_list))
+fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(14, 6), constrained_layout=True)
+
+rcParams['font.sans-serif'] = ['Tahoma']
+matplotlib.rcParams['savefig.dpi'] = 100
+axs[0].spines["top"].set_visible(False)
+axs[0].spines["right"].set_visible(False)
+axs[0].get_xaxis().tick_bottom()
+axs[0].get_yaxis().tick_left()
+axs[0].spines["bottom"].set_linewidth(2)
+axs[0].spines["left"].set_linewidth(2)
+axs[0].scatter(cc, sst_tsg_RS, color=colors_soundings, s=120, marker='o')
+axs[0].set_ylabel('SST [$^{\circ}C$]', fontsize=fontSizeX)
+axs[0].set_xlabel('cloud cover []', fontsize=fontSizeX)
+
+axs[1].spines["top"].set_visible(False)
+axs[1].spines["right"].set_visible(False)
+axs[1].get_xaxis().tick_bottom()
+axs[1].get_yaxis().tick_left()
+axs[1].spines["bottom"].set_linewidth(2)
+axs[1].spines["left"].set_linewidth(2)
+axs[1].scatter(cc, LTS, color=colors_soundings, s=120, marker='o')
+axs[1].set_ylabel('LTS []', fontsize=fontSizeX)
+axs[1].set_xlabel('cloud cover []', fontsize=fontSizeX)
+for ax, l in zip(axs[:].flatten(), ['(a) ',  '(b) ']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=20, transform=ax.transAxes)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(which='minor', length=5, width=2)
+    ax.tick_params(which='major', length=7, width=3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+fig.savefig(path_RS+'scatter_SST_LTS_CC.png', format='png')
+
+
+fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(14, 6), constrained_layout=True)
+rcParams['font.sans-serif'] = ['Tahoma']
+matplotlib.rcParams['savefig.dpi'] = 100
+axs[0].spines["top"].set_visible(False)
+axs[0].spines["right"].set_visible(False)
+axs[0].get_xaxis().tick_bottom()
+axs[0].get_yaxis().tick_left()
+axs[0].spines["bottom"].set_linewidth(2)
+axs[0].spines["left"].set_linewidth(2)
+axs[0].scatter(sst_tsg_RS, theta_Surf, color=colors_soundings, s=120, marker='o')
+axs[0].set_xlabel('SST [$^{\circ}C$]', fontsize=fontSizeX)
+axs[0].set_ylabel('Potential temperature [K]', fontsize=fontSizeX)
+
+axs[1].spines["top"].set_visible(False)
+axs[1].spines["right"].set_visible(False)
+axs[1].get_xaxis().tick_bottom()
+axs[1].get_yaxis().tick_left()
+axs[1].spines["bottom"].set_linewidth(2)
+axs[1].spines["left"].set_linewidth(2)
+axs[1].scatter(sst_tsg_RS, theta_700, color=colors_soundings, s=120, marker='o')
+axs[1].set_ylabel('Potential temperature [K]', fontsize=fontSizeX)
+axs[1].set_xlabel('SST [$^{\circ}C$]', fontsize=fontSizeX)
+for ax, l in zip(axs[:].flatten(), ['(a) theta at surface',  '(b) theta at 700 Hpa']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=20, transform=ax.transAxes)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(which='minor', length=5, width=2)
+    ax.tick_params(which='major', length=7, width=3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+fig.savefig(path_RS+'scatter_theta_SST.png', format='png')
+
+# scatter plots of sst radiosonde versus EIS, LTS, LCL, PBLheight
+
+
+# composite figure for potential temperature and virtual potential temperature
+fig, axs = plt.subplots(2, 2, figsize=(12,8), sharex=True, constrained_layout=True)
+grid = True
+matplotlib.rc('xtick', labelsize=36)  # sets dimension of ticks in the plots
+matplotlib.rc('ytick', labelsize=36) # sets dimension of ticks in the plots
+labelsizeaxes   = 26
+fontSizeTitle   = 26
+fontSizeX       = 26
+fontSizeY       = 26
+cbarAspect      = 26
+fontSizeCbar    = 26
+
+import custom_color_palette as ccp
+from matplotlib import rcParams
+import matplotlib.ticker as ticker
+
+
+    #plot p
+axs[0,0].scatter(sst_tsg_RS, PBLheight, color=colors_soundings, s=80, marker='o', rasterized=True)
+#axs[0].set_xlim(290.,325.)
+axs[0,0].set_ylabel('PBL height [m]', fontsize=fontSizeX)
+axs[0,0].set_ylim(100., 1800.)
+
+#axs[0].text(text_x[ind_file], text_y[ind_file], legend_string[ind_file], color=colors_soundings[ind_file], fontsize=14, horizontalalignment='center', verticalalignment='center', transform=axs[0].transAxes)
+#plot t
+axs[0,1].scatter(sst_tsg_RS, z_lcl, color=colors_soundings, s=80, marker='o', rasterized=True)
+axs[0,1].set_ylabel('LCL [m]', fontsize=fontSizeX)
+axs[0,1].set_ylim(100., 1000.)
+
+#axs[1].set_xlim(300.,325.)
+#plot rh
+axs[1,0].scatter(sst_tsg_RS, EIS, color=colors_soundings, s=80, marker='o', rasterized=True)
+axs[1,0].set_ylabel('EIS []', fontsize=fontSizeX)
+axs[1,0].set_ylim(10., 20.)
+
+axs[1,1].scatter(sst_tsg_RS, LTS, color=colors_soundings, s=80, marker='o', rasterized=True)
+axs[1,1].set_ylabel('LTS []', fontsize=fontSizeX)
+axs[1,1].set_ylim(10., 20.)
+
+for ax, l in zip(axs[:].flatten(), ['(a) ',  '(b) ',  '(c) ',  '(d) ']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=20, transform=ax.transAxes)
+    #ax.
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_linewidth(3)
+    ax.spines["left"].set_linewidth(3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(which='minor', length=5, width=2)
+    ax.tick_params(which='major', length=7, width=3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(axis='both', labelsize=26)
+fig.savefig(path_RS+'scatter_parameters_sst.png')
+
+# reading cloud base slice for plotting
+ceilo_slice = ceilometer.sel(time=slice(t_start, t_end))
+cb_plot = ceilo_slice.cbh.values[:,0]
+cb_plot = cb_plot.astype('float')
+cb_plot[cb_plot == -1] = np.nan
+time_cb_plot = ceilo_slice.time.values
+
+# composite figure for time series
+fig, axs = plt.subplots(5, 1, figsize=(10,15), sharex=True, constrained_layout=True)
+grid = True
+matplotlib.rc('xtick', labelsize=36)  # sets dimension of ticks in the plots
+matplotlib.rc('ytick', labelsize=36) # sets dimension of ticks in the plots
+labelsizeaxes   = 23
+fontSizeTitle   = 23
+fontSizeX       = 23
+fontSizeY       = 23
+cbarAspect      = 26
+fontSizeCbar    = 26
+
+import custom_color_palette as ccp
+from matplotlib import rcParams
+import matplotlib.ticker as ticker
+
+axs[0].plot(tsg_time_sst, sst_tsg, color='grey', label='sst tsg')
+axs[0].scatter(tsg_datetime_RS, sst_tsg_RS, color=colors_soundings, s=120, marker='o', label='radiosonde time stamps')
+axs[0].set_ylabel('SST [$^{\circ}$C]', fontsize=fontSizeX)
+axs[0].legend()
+    #plot p
+#axs[0].set_xlim(290.,325.)
+
+axs[1].scatter(tsg_datetime_RS, PBLheight, color=colors_soundings, s=120, marker='o', rasterized=True)
+axs[1].set_ylim(0., 1000.)
+axs[1].set_ylabel(' PBL height [m]', fontsize=fontSizeX)
+#axs[1].set_ylim(100., 1800.)
+
+#axs[0].text(text_x[ind_file], text_y[ind_file], legend_string[ind_file], color=colors_soundings[ind_file], fontsize=14, horizontalalignment='center', verticalalignment='center', transform=axs[0].transAxes)
+#plot t
+axs[2].scatter(tsg_datetime_RS, z_lcl, color=colors_soundings, s=120, marker='o', rasterized=True)
+axs[2].set_ylabel('LCL [m]', fontsize=fontSizeX)
+axs[2].set_ylim(500., 1000.)
+
+#axs[1].set_xlim(300.,325.)
+#plot rh
+axs[4].scatter(tsg_datetime_RS, EIS, color=colors_soundings, s=120, marker='o', rasterized=True)
+axs[4].set_ylabel('EIS []', fontsize=fontSizeX)
+axs[4].set_ylim(10., 20.)
+
+axs[3].scatter(time_cb_plot, cb_plot, color='orange',  s=60, marker=7, label='cloud base')
+axs[3].set_ylabel('Cloud base height [m]', fontsize=fontSizeX)
+axs[3].set_ylim(0., 1500.)
+
+for ax, l in zip(axs[:].flatten(), ['(a) ',  '(b) ',  '(c) ',  '(d) ', '(e) ']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=16, transform=ax.transAxes)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%d %H'))
+    ax.set_xlim(t_start, t_end)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_linewidth(3)
+    ax.spines["left"].set_linewidth(3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(which='minor', length=5, width=2)
+    ax.tick_params(which='major', length=7, width=3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(axis='both', labelsize=26)
+    ax.grid(True, which='both', color='grey', linestyle=':')
+fig.savefig(path_RS+'parameters_time_series.png')
+
+
+
+
+# creating dataset with all the data
+# saving data in ncdf file
+dims              = ['sst','height_index']
+coords         = {"sst":sst_tsg_RS, "height_index":np.arange(0,dim_height,1)}
+theta           = xr.DataArray(dims=dims, coords=coords, data=theta_matrix,
+                 attrs={'long_name':'Potential temperature',
+                        'units':'K'})
+theta_v           = xr.DataArray(dims=dims, coords=coords, data=theta_v_matrix,
+                 attrs={'long_name':'Virtual potential temperature',
+                        'units':'K'})
+temperature  = xr.DataArray(dims=dims, coords=coords, data=ta,
+                 attrs={'long_name':'Air temperature',
+                        'units':'K'})
+relative_humidity = xr.DataArray(dims=dims, coords=coords, data=rh,
+                 attrs={'long_name':'Relative humidity',
+                        'units':'%'})
+wind_speed = xr.DataArray(dims=dims, coords=coords, data=wspd,
+                 attrs={'long_name':'Horizontal wind speed',
+                        'units':'ms-1'})
+wind_direction = xr.DataArray(dims=dims, coords=coords, data=wdir,
+                 attrs={'long_name':'Horizontal wind speed',
+                        'units':'ms-1'})
+water_vapor_mixing_ratio = xr.DataArray(dims=dims, coords=coords, data=wvmr,
+                 attrs={'long_name':'Water vapor mixing ratio',
+                        'units':'kg kg-1'})
+pressure = xr.DataArray(dims=dims, coords=coords, data=p,
+                 attrs={'long_name':'pressure',
+                        'units':'Pa'})
+latitude = xr.DataArray(dims=dims, coords=coords, data=lat,
+                 attrs={'long_name':'Latitude',
+                        'units':'degrees'})
+longitude = xr.DataArray(dims=dims, coords=coords, data=lon,
+                 attrs={'long_name':'Longitude',
+                        'units':'degrees'})
+height = xr.DataArray(dims=dims, coords=coords, data=height,
+                 attrs={'long_name':'height',
+                        'units':'meters'})
+pblh = xr.DataArray(dims=['sst'], coords={'sst':sst_tsg_RS}, data=PBLheight,
+                 attrs={'long_name':'Planetary boundary layer height calculated using bulk Richardson number',
+                        'units':'meters'})
+lifting_condensation_level = xr.DataArray(dims=['sst'], coords={'sst':sst_tsg_RS}, data=z_lcl,
+                 attrs={'long_name':'lifting condensation level calculated using Rumps formula',
+                        'units':'meters'})
+cloud_base_height = xr.DataArray(dims=['sst'], coords={'sst':sst_tsg_RS}, data=cb_arr,
+                 attrs={'long_name':'mean cloud base extracted from ceilometer from Atalante',
+                        'units':'meters'})
+cloud_fraction = xr.DataArray(dims=['sst'], coords={'sst':sst_tsg_RS}, data=cc,
+                 attrs={'long_name':'mean cloud base cloud fraction extracted from ceilometer from Atalante averaged on 15 min around the selected time',
+                        'units':'meters'})
+LTS_index = xr.DataArray(dims=['sst'], coords={'sst':sst_tsg_RS}, data=LTS,
+                 attrs={'long_name':'Lower tropospheric stability index from Wood and Bretherton, 2006',
+                        'units':'K'})
+
+variables         = {'lts':LTS_index,
+                     'cf':cloud_fraction,
+                     'cbh':cloud_base_height,
+                     'lcl':lifting_condensation_level,
+                     'pblh':pblh,
+                     'height':height,
+                     'longitude':longitude,
+                     'latitude':latitude,
+                     'pressure':pressure,
+                     'wvmr':water_vapor_mixing_ratio,
+                     'wind_dir':wind_direction,
+                     'wind_speed':wind_speed,
+                     'rh':relative_humidity,
+                     'ta':temperature,
+                     'theta_v':theta_v,
+                     'theta':theta,
+                             }
+
+RS_atalante_Data      = xr.Dataset(data_vars = variables,
+                       coords = coords)
+
+Data_SST_sorted = RS_atalante_Data.sortby('sst', ascending=True)
+
+# building binned array of sst
+bin_size = 0.25
+binned_sst = np.round(np.arange(np.nanmin(sst_tsg_RS),np.nanmax(sst_tsg_RS), bin_size),3)
+print(len(binned_sst))
+
+#defining color palette for subsequent plots
+colors_binned_sst = plt.cm.inferno(np.linspace(0, 1, len(binned_sst)))
+
+
+list_binned_datasets = []
+list_mean_binned_datasets = []
+
+# calculating mean and std properties for each bin of sst
+for ind_sst in range(len(binned_sst)-1):
+    sst_inf = binned_sst[ind_sst]
+    sst_sup = binned_sst[ind_sst+1]
+    sliced_data_SST = Data_SST_sorted.sel(sst=slice(sst_inf, sst_sup))
+    list_binned_datasets.append(sliced_data_SST)
+    # calculating mean and standard deviation
+    list_mean_binned_datasets.append(sliced_data_SST.mean(dim='sst', skipna=True))
+
+
+# storing the new variables in the file
+#RRData['calibration_constant']  = data['calibration_constant']
+#RS_atalante_Data.attrs                    = global_attributes
+#RS_atalante_Data['time'].attrs          = {'units':'seconds since 1970-01-01 00:00:00'}
+#RS_atalante_Data.to_netcdf(pathOutData+date+'_'+hour+'_preprocessedClau_4Albert.nc')
+
+
+
+# composite figure for potential temperature and virtual potential temperature
+fig, axs = plt.subplots(3, 2, figsize=(16,10), constrained_layout=True)
+grid = True
+matplotlib.rc('xtick', labelsize=36)  # sets dimension of ticks in the plots
+matplotlib.rc('ytick', labelsize=36) # sets dimension of ticks in the plots
+labelsizeaxes   = 16
+fontSizeTitle   = 16
+fontSizeX       = 16
+fontSizeY       = 16
+cbarAspect      = 16
+fontSizeCbar    = 16
+
+import custom_color_palette as ccp
+from matplotlib import rcParams
+import matplotlib.ticker as ticker
+color_arr = {}
+for ind_dataset in range(len(list_binned_datasets)):
+    #reading the dataset
+    DS = list_binned_datasets[ind_dataset]
+    #plot dataset mean and std of the radiosondes
+    axs[0,0].scatter(np.repeat(binned_sst[ind_dataset],len(DS['lcl'].values)), DS['lcl'].values, color=colors_binned_sst[ind_dataset], s=60, marker='o', rasterized=True)
+    #axs[0].set_xlim(290.,325.)
+    axs[0,1].scatter(np.repeat(binned_sst[ind_dataset],len(DS['lts'].values)), DS['lts'].values, color=colors_binned_sst[ind_dataset], s=60, marker='o', rasterized=True)
+    axs[1,0].scatter(np.repeat(binned_sst[ind_dataset],len(DS['cf'].values)), DS['cf'].values, color=colors_binned_sst[ind_dataset], s=60, marker='o', rasterized=True)
+    axs[1,1].scatter(np.repeat(binned_sst[ind_dataset],len(DS['cbh'].values)), DS['cbh'].values, color=colors_binned_sst[ind_dataset], s=60, marker='o', rasterized=True)
+    axs[2,0].scatter(np.repeat(binned_sst[ind_dataset],len(DS['pblh'].values)), DS['pblh'].values, color=colors_binned_sst[ind_dataset], s=60, marker='o', rasterized=True)
+    axs[2,1].scatter(DS['longitude'].values, DS['latitude'].values, color=colors_binned_sst[ind_dataset], s=20, marker='o', rasterized=True)
+
+axs[0,0].set_ylabel('lcl [m]', fontsize=fontSizeX)
+axs[0,0].set_ylim(100., 1800.)
+axs[0,1].set_ylabel('lts [K]', fontsize=fontSizeX)
+axs[0,1].set_ylim(10., 20.)
+axs[1,0].set_ylabel('cloud fraction []', fontsize=fontSizeX)
+axs[1,0].set_ylim(0., 1.)
+axs[1,1].set_ylabel('cloud base height [m]', fontsize=fontSizeX)
+axs[1,1].set_ylim(500., 1500.)
+axs[2,0].set_ylabel('pblh[m]', fontsize=fontSizeX)
+axs[2,0].set_ylim(500., 1500.)
+axs[2,1].set_ylabel('Latitude [degrees]', fontsize=fontSizeX)
+axs[2,1].set_xlabel('Longitude [degrees]', fontsize=fontSizeX)
+count = 0
+for ax, l in zip(axs[:].flatten(), ['(a) ',  '(b) ',  '(c) ',  '(d) ', '(e) ', '(f) ']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=16, transform=ax.transAxes)
+    if count < 5:
+        ax.set_xlim(binned_sst[0]-0.1, binned_sst[-1]+0.1)
+    if count == 4:
+        ax.set_xlabel('SST [$^{\circ}$C]', fontsize=fontSizeX)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["bottom"].set_linewidth(3)
+    ax.spines["left"].set_linewidth(3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(which='minor', length=5, width=2)
+    ax.tick_params(which='major', length=7, width=3)
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(n=5))
+    ax.tick_params(axis='both', labelsize=26)
+    #ax.grid(True, which='both', color='grey', linestyle=':')
+    count = count+1
+
+fig.savefig(path_RS+'scatter_binned_sst.png')
+
+
+fig, axs = plt.subplots(4, 2, figsize=(16,10), sharey=True, constrained_layout=True)
+grid = True
+matplotlib.rc('xtick', labelsize=36)  # sets dimension of ticks in the plots
+matplotlib.rc('ytick', labelsize=36) # sets dimension of ticks in the plots
+labelsizeaxes   = 16
+fontSizeTitle   = 16
+fontSizeX       = 16
+fontSizeY       = 16
+cbarAspect      = 16
+fontSizeCbar    = 16
+
+import custom_color_palette as ccp
+from matplotlib import rcParams
+import matplotlib.ticker as ticker
+color_arr = {}
+for ind_dataset in range(len(list_binned_datasets)):
+    #reading the dataset
+    DS = list_mean_binned_datasets[ind_dataset]
+    print(np.shape(DS['theta'].values))
+    #plot dataset mean and std of the radiosondes
+    axs[0,0].plot(DS['theta'].values, DS['height'].values, color=colors_binned_sst[ind_dataset], rasterized=True)
+    axs[0,1].plot(DS['theta_v'].values, DS['height'].values, color=colors_binned_sst[ind_dataset], rasterized=True)
+    axs[1,0].plot(DS['wind_speed'].values, DS['height'].values, color=colors_binned_sst[ind_dataset], rasterized=True)
+    axs[1,1].plot(DS['wind_dir'].values, DS['height'].values, color=colors_binned_sst[ind_dataset], rasterized=True)
+    axs[2,0].plot(DS['wvmr'].values, DS['height'].values, color=colors_binned_sst[ind_dataset], rasterized=True)
+    axs[2,1].plot(DS['wvmr'].values, DS['height'].values, color=colors_binned_sst[ind_dataset], rasterized=True)
+    axs[3,0].plot(DS['rh'].values, DS['height'].values, color=colors_binned_sst[ind_dataset], rasterized=True)
+    axs[3,1].plot(DS['ta'].values, DS['height'].values, color=colors_binned_sst[ind_dataset], rasterized=True)
+
+
+    #axs[0].set_xlim(290.,325.)
+axs[0,0].set_xlim(280., 330.)
+axs[0,1].set_xlim(280., 330.)
+for ax, l in zip(axs[:].flatten(), ['(a) ',  '(b) ',  '(c) ',  '(d) ', '(e) ', '(f) ', '(g) ', '(h) ']):
+    ax.text(-0.05, 1.05, l,  fontweight='black', fontsize=16, transform=ax.transAxes)
+    ax.set_ylim(0., 4500.)
+
+fig.savefig(path_RS+'profiles_binned_sst.png')
+
+
+
 strasuka
-fig, ax = plt.subplots()
-# set here the variable from ds to plot, its color map and its min and max values
-#plt.plot(data_RS.rh.values[:,0], data_RS.p.values[:,0], color='blue', label='original')
-#plt.plot(data_RS_good.rh.values[:,0], data_RS_good.p.values[:,0], color='red', label='p')
-plt.plot(data_RS_interp.rh.values[:,0], height, color='green', label='interp')
-ax.set_title("relative humidity profile : ")
-#ax.set_xlim(time_min, time_max)
-#ax.set_ylim(0, 4500);
-ax.legend()
-fig.savefig(path_RS+'rh_profile.png', format='png')
-
-fig, ax = plt.subplots()
-plt.plot(data_RS_good.p.values[:,0])
-fig.savefig(path_RS+'P-original.png', format='png')
-
-fig, ax = plt.subplots()
-plt.plot(data_RS_interp.p.values[:,0])
-fig.savefig(path_RS+'P-interp.png', format='png')
-strasuka
-
-#V_windS_hour = V_windS_hour.interp(height=heightRad)
-
-#data_RS = data_RS.assign_coords({"height": height_grid})
-
-print(data_RS)
-
-#data_RS['height'] = height
-print(np.ediff1d(height))
-print(height[0][0], height[0][-1])
