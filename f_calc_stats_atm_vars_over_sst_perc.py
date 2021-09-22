@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# %%
 """
 Created on Wed Jul 22 10:42:54 2020
 @ date; 14 april 2021
@@ -37,7 +38,7 @@ path_sst_flag = "/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/\
 SST_impact_work/"
 sst_flag = xr.open_dataset(path_sst_flag+sst_flag_file)
 
-#%%
+# %%
 
 # read wind lidar data
 path_wind_lidar = "/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/data_wind_lidar/"
@@ -129,7 +130,7 @@ axs[1].set_ylabel("occurrences [#]", fontsize=fontSizeY)
 
 fig.tight_layout()
 fig.savefig(path_fig+string_out+'_w_cb_histogram.png', format='png')
-#%%
+# %%
 
 # reading arthus data for latent heat flux
 path_arthus = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/data_arthus/case_1/'
@@ -181,7 +182,7 @@ sst_arthus_interp_SHF = sst_flag.interp(time=arthus_data_SHF['time'].values, met
 
 # merging the interpolated dataset and the wind lidar dataset
 data_arthus_merged_SHF = xr.merge([arthus_data_SHF, sst_arthus_interp_SHF])
-#%%
+# %%
 
 # plotting latent and sensible heat fluxes
 fig, axs = plt.subplots(3, 1, figsize=(24,16), sharex=True, constrained_layout=True)
@@ -241,7 +242,7 @@ axs[2].legend(frameon=False, loc='upper left',fontsize=32)
 fig.savefig(path_fig+string_out+'_fluxes_quicklooks_arthus.png', format='png')
 
 
-#%%
+# %%
 
 # reading water vapor mixing ratio data from Diego
 path_arthus = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/data_arthus/case_1/'
@@ -275,7 +276,7 @@ arthus_data_T_2 = arthus_T_2.isel(Time=index)
 
 arthus_all_T = xr.merge([arthus_data_T_1, arthus_data_T_2])
 
-#%%
+# %%
 
 
 # defining flag for data points
@@ -391,7 +392,7 @@ LH_cold[LH_cold > 700] = np.nan
 LH_warm[LH_warm < -700] = np.nan
 LH_warm[LH_warm > 700] = np.nan
 
-#%%
+# %%
 
 # plotting histogram of vertical wind averaged in the first 300 m
 labelsizeaxes    = 32
@@ -467,10 +468,10 @@ fig.savefig(path_fig+string_out+'_LHF_histogram.png', format='png')
 
 
 
-#%%
+# %%
 
 # reading horizontal wind and speed data
-path_Doppler_lidar = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/doppler_lidar/case_2/'
+path_Doppler_lidar = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/doppler_lidar/case_1/'
 file_1_speed = '20200129_DL_Wind_Speed.nc'
 speed_data_1 = xr.open_dataset(path_Doppler_lidar+file_1_speed)
 file_2_speed = '20200130_DL_Wind_Speed.nc'
@@ -488,7 +489,7 @@ speed_data = xr.merge([speed_data_1, speed_data_2])
 dir_data = xr.merge([dir_data_1, dir_data_2])
 
 
-#%%
+# %%
 
 # restricting data to the lowest 1500 m
 speed_sel = speed_data.sel(Height=slice(0., 1500.))
@@ -559,7 +560,9 @@ axs[2].scatter(timetsg_10s, tsg_10s, color='blue', label='<=10$^{th}$ percentile
 
 
 axs[2].set_ylabel('SST TSG [$^{\circ}$C]', fontsize=32)
-axs[2].set_ylim(26ooe-or-.,28.5)
+axs[2].set_ylim(26.,28.5)
 axs[2].set_xlabel('Time UTC [dd hh]', fontsize=32)
 axs[2].legend(frameon=False, loc='upper left',fontsize=32)
 fig.savefig(path_fig+string_out+'_quicklooks_Doppler_lidar.png', format='png')
+
+# %%

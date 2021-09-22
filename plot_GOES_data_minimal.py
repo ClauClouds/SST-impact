@@ -1,3 +1,4 @@
+# %%
 """
 Created on Sat Mar 20 09:43:09 2021
 
@@ -125,8 +126,8 @@ for k in np.arange(0,flist.__len__()):
         
 for k in  np.arange(0,flist.__len__()):
     BCMall.time.data[k].replace(tzinfo = timezone.utc)
-    
-#%% save the BCMall to a netcdf
+
+# %% save the BCMall to a netcdf
 BCMnc = BCMall
 for k in  np.arange(0,flist.__len__()):
     BCMnc.time.data[k] = BCMnc.time.data[k].timestamp()
@@ -136,7 +137,7 @@ BCMall.to_netcdf(path = path + new_filename)
 BCMall.close()
 print ('finished saving')
 
-#%%   
+# %%
 #load the BCM all saved to netcdf (this is to save the time to run the previous section)
 BCMall = xr.open_dataarray(path + '2_3_Feb_BCMall_GOES.nc')
 CC = BCMall.data
@@ -166,7 +167,7 @@ plt.ylabel('SST')
 #convert to Barbados time    
 timeBA =BCMall.time.data-dt.timedelta(hours=4) 
 
-#%% Figures 
+# %% Figures
 
 import matplotlib.dates as mdates
 myFmt = mdates.DateFormatter('%d-%H')
@@ -208,4 +209,4 @@ plt.title(
   
     
 
-    
+
