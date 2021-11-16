@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# %%
 """
 Created on Thu Apr 29 20:07:52 2021
 
@@ -109,7 +110,7 @@ def f_calc_tot_cloud_fraction(matrix):
 
     return(np.asarray(cloud_fraction))
 
-#%%
+# %%
 # reading radar file list
 file_list = np.sort(glob.glob("/Volumes/Extreme SSD/ship_motion_correction_merian/corrected_data/daily_files_intake/daily_files/*.nc"))
 file_list = file_list[14:16]
@@ -179,7 +180,7 @@ Sw_warm = data_warm.spectral_width.values
 cloud_fraction_cold = f_calc_tot_cloud_fraction(Ze_cold)
 cloud_fraction_warm = f_calc_tot_cloud_fraction(Ze_warm)
 
-#%%
+# %%
 hmin         = 100.
 hmax         = 2200.
 labelsizeaxes = 32
@@ -218,7 +219,7 @@ ax.set_xlabel("Hydrometeor fraction []", fontsize=fontSizeY)
 fig.tight_layout()
 fig.savefig(path_fig+'__cloud_fractions_2_3_feb.png', bbox_inches='tight')
 
-#%%
+# %%
 
 
 time_cold = data_cold.time.values
@@ -319,9 +320,9 @@ for ivar, var in enumerate(var_plot):
     f_plot_2dhist(2500, dict_input)
     print('plot done')
     print('********************************')
-    
-    
-#%%
+
+
+# %%
 
 
 
