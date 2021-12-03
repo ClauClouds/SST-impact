@@ -25,7 +25,7 @@ import atmos
 import datetime as dt
 import matplotlib.pyplot as plt
 from scipy import interpolate
-dim_interp = 1200
+dim_interp = 12000
 def f_interpolation_sondes(height,var):
     height_interp = np.linspace(0, 12000, dim_interp)
 
@@ -68,8 +68,9 @@ for ind_file in range(n_soundings):
     #print(soundings_strings_sorted[ind_file])
     legend_string.append(soundings_strings_sorted[ind_file][-6:-4]+' - '+soundings_strings_sorted[ind_file][-4:-2]+':'+soundings_strings_sorted[ind_file][-2:]+'UTC')
 
+#%%
 # assigning vertical dimension larger than all number of levels of the sondes
-dim_height = 7000
+dim_height = 12000
 
 # defining matrices of data
 wvmr = np.zeros((n_soundings, dim_height))
@@ -113,15 +114,12 @@ for ind_file, index in enumerate(ind_sorted):
     lon[ind_file,0:dim_sounding] = data_RS.lon.values[0,:]
     flight_time[ind_file,0:dim_sounding] = data_RS.flight_time.values[0,:]
     sounding_id.append(data_RS.sounding.values)
-    height[ind_file,0:dim_sounding] = data_RS.alt.values[0,:]
-
+    height[ind_file,0:dim_sounding] = data_RS.alt.values[:]
+#%%
 
 # regridding radiosoundings on a common vertical grid
 
 
-# defining height array to interpolate heights
-print(height_interp)
-strasukamelo
 # defining matrices of data
 wvmr_interp = np.zeros((n_soundings, dim_interp))
 p_interp = np.zeros((n_soundings, dim_interp))
@@ -150,22 +148,24 @@ for ind_file, index in enumerate(ind_sorted):
     data_RS = xr.open_dataset(file_list_RS[index])
 
     # reading x coordinate for interpolation
-    x = data_RS.alt.values[0,:]
-    y =
-    y_new =
+    x = data_RS.alt.values[:][0]
+    #y =
+    #y_new =
     # building interpolation function for the selected variable
 
     wvmr[ind_file,:] = f_interpolation_sondes(x,data_RS.mr.values[0,:])
     p[ind_file,:] = f_interpolation_sondes(x,data_RS.p.values[0,:])
-    rh[ind_file,:] = data_RS.rh.values[0,:]
-    ta[ind_file,:] = data_RS.ta.values[0,:]
-    wdir[ind_file,:] = data_RS.wdir.values[0,:]
-    wspd[ind_file,:] = data_RS.wspd.values[0,:]
-    lat[ind_file,:] = data_RS.lat.values[0,:]
-    lon[ind_file,:] = data_RS.lon.values[0,:]
-    flight_time[ind_file,:] = data_RS.flight_time.values[0,:]
+    rh[ind_file,:] = f_interpolation_sondes(x,data_RS.rh.values[0,:])
+    ta[ind_file,:] = f_interpolation_sondes(x,data_RS.ta.values[0,:])
+    wdir[ind_file,:] = f_interpolation_sondes(x,data_RS.wdir.values[0,:])
+    wspd[ind_file,:] = f_interpolation_sondes(x, data_RS.wspd.values[0,:])
+    lat[ind_file,:] = f_interpolation_sondes(x,data_RS.lat.values[0,:])
+    lon[ind_file,:] = f_interpolation_sondes(x,data_RS.lon.values[0,:])
+    flight_time[ind_file,:] = f_interpolation_sondes(x,data_RS.flight_time.values[0,:])
     sounding_id.append(data_RS.sounding.values)
 
+
+#%%
 # plot multipanel with all profiles
 colors_soundings = plt.cm.brg(np.linspace(0, 1, n_soundings))
 

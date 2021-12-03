@@ -21,7 +21,6 @@ from myFunctions import f_closest
 from warnings import warn
 import numpy as np
 import pandas as pd
-import atmos
 import datetime as dt
 import matplotlib.pyplot as plt
 from scipy import interpolate
@@ -32,7 +31,7 @@ import matplotlib.ticker as ticker
 # reading radiosondes
 path_RS = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/radiosondes_atalante/case_1/'
 file_list_RS = [path_RS+'EUREC4A_Atalante_Vaisala-RS_L2_v3.0.0.nc', path_RS+'EUREC4A_Atalante_Meteomodem-RS_L2_v3.0.0.nc']
-
+path_out = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/post_processed_data/'
 # +
 # read radiosonde from vaisala
 data_RS_vaisala = xr.open_dataset(file_list_RS[0])
@@ -681,7 +680,7 @@ print(height)
 # creating dataset with all the data
 # saving data in ncdf file
 dims              = ['sst','height']
-coords         = {"sst":sst_tsg_RS, "height":height.values}
+coords         = {"sst":sst_tsg_RS, "height":height}
 theta           = xr.DataArray(dims=dims, coords=coords, data=theta_,
                  attrs={'long_name':'Potential temperature',
                         'units':'K'})
@@ -752,6 +751,8 @@ variables         = {'lts':LTS_index,
 RS_atalante_Data      = xr.Dataset(data_vars = variables,
                        coords = coords)
 RS_atalante_Data_new = RS_atalante_Data.reindex(sst=sorted(RS_atalante_Data.sst.values))
+RS_atalante_Data_new.to_netcdf(path_out+'radiosondes_atalante_binned_sst.nc')
+
 
 #RS_atalante_Data_new.pressure.plot()
 RS_atalante_Data_new.theta.plot(x='sst', y='height')
@@ -805,7 +806,7 @@ RS_atalante_Data_new.lcl.plot(marker='P', ax=axs[2,2], label='lcl')
 axs[2,2].legend(frameon=False)
 fig.savefig(path_RS+'fields_sortedby_sst.png')
 # -
-
+#%%
 # building binned array of sst
 bin_size = 0.25
 binned_sst = np.round(np.arange(np.nanmin(sst_tsg_RS),np.nanmax(sst_tsg_RS), bin_size),1)
