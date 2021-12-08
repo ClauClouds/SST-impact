@@ -36,7 +36,7 @@ save_path='/home/j/Desktop/PROJ_WORK_Thesis/figures/GOES/' # path to save the im
 flist = GOES.locate_files(path, 'OR_ABI-L2-ACMF*.nc',
                           '20200202-040000', '20200204-040400')
 
-# get MErian and TALANTe track from EUREC4a intake
+# get Merian and ATALANTe track from EUREC4a intake
 Merian_track = xr.open_dataset(\
 "https://observations.ipsl.fr/thredds/dodsC/EUREC4A/PRODUCTS/TRACKS/EUREC4A_tracks_MS-Merian_v1.0.nc")
 Atalante_track = xr.open_dataset(\
@@ -377,35 +377,7 @@ for k in np.arange(208,288): #(0,flist.__len__()):
                 bbox_inches='tight',dpi=300)
     plt.show()
     plt.close()
-   
-
-
-# Figure 3: figure timesereis of Cloud fraction and SST areas (probably not useful)
-fig, ax = plt.subplots(nrows=2, dpi=300,figsize=(12, 15))
-plt.sca(ax[0])
-plt.plot(timeBA, CFin,'b.', label='CF over the cold SST (<=26.5)')
-plt.plot(timeBA, CFout,'r.',label='CF over the warm SST (>=27)')
-if  product_switch == 1: 
-    plt.title('Cloud fraction upwind and over the cold SST (cloud = BT<294K)',
-              loc='left')
-elif product_switch == 0: 
-     plt.title('CF upwind and over the cold SST (cloud from clear sky mask)',
-              loc='left')
-plt.xlabel('Local Time (UTC-4)')
-ax[0].xaxis.set_major_formatter(myFmt)
-plt.grid()
-plt.legend()
-plt.sca(ax[1])
-plt.contour(SST.lon.data, SST.lat.data, SST.data, colors = 'black',
-                levels = [26.5,26.6])
-plt.contourf(SSTup.lon.data, SSTup.lat.data, SSTup.data,
-                levels = [23.5,26.5,27,30], cmap='bwr')
-plt.contourf(SST.lon.data, SST.lat.data, SST.data,
-                levels = [25.5,26.5], cmap='winter')
-plt.title('the two SST based regions')
-ax[1].set_aspect('equal', adjustable='box') 
-#plt.subplots_adjust(bottom=0., right=0.8, top=0.9)
-plt.grid()
+  
    
     
      
