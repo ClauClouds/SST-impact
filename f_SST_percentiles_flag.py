@@ -18,6 +18,7 @@ import numpy as np
 import xarray as xr
 from datetime import datetime
 import matplotlib.dates as mdates
+import pandas as pd
 
 def f_closest(array,value):
     '''
@@ -35,7 +36,7 @@ def f_closest(array,value):
 processing_mode = 'case_study_1' #  'all_campaign' #
 
 # set percentiles values to use
-perc_vals = [10, 90] #  'all_campaign' #
+perc_vals = [10, 90] 
 perc_string = str(perc_vals)[1:3]+'_'+str(perc_vals)[5:7]
 
 
@@ -55,27 +56,17 @@ tsg_file = "/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/tsg_sst_
 # opening ship data and reading sst
 dataset = xr.open_dataset(ship_data+ship_file)
 tsg_data = xr.open_dataset(tsg_file)
+string_out = '20200202_20200203'
+t_start = datetime(2020, 2, 2, 0, 0, 0)
+t_end = datetime(2020, 2, 3, 23, 59, 59)
 
-# setting time window to be checked
-if processing_mode == 'case_study_1':
-    string_out = '20200202_20200203'
-    t_start = datetime(2020, 2, 2, 0, 0, 0)
-    t_end = datetime(2020, 2, 3, 23, 59, 59)
-elif processing_mode == 'case_study_2':
-    string_out = '20200129_20200130'
-    t_start = datetime(2020, 1, 29, 0, 0, 0)
-    t_end = datetime(2020, 1, 30, 23, 59, 59)
-else:
-    string_out = '20200123'
-    t_start = datetime(2020, 1, 23, 0, 0, 0)
-    t_end = datetime(2020, 1, 23, 23, 59, 59)   
     
 print(t_start, t_end)
     
 # slicing dataset for the selected time interval and extracting sst
 sliced_ds = dataset.sel(time=slice(t_start, t_end))
 sst = sliced_ds['SST'].values
-time_sst = sliced_ds['time'].values
+time_sst = pd.to_datetime(sliced_ds['time'].values)
 
 # slicing tsg datase t for the selected time interval and extracting sst
 sliced_tsg_ds = tsg_data.sel(TIME=slice(t_start, t_end))
@@ -108,13 +99,10 @@ i_sst_low_tsg = np.where(temp_merqctsg < tsg_perc_10th)[0]
 i_sst_high_tsg = np.where(temp_merqctsg >= tsg_perc_90th)[0]
 
 
-print(len(i_sst_low), len(i_sst_high))
-print(len(i_sst_low_tsg), len(i_sst_high_tsg))
 #%%
 # generating flag to identify the sst < thr_low ( flag == 1) and sst > trh_high
 # flag == 2.
-print(len(sst[i_sst_low]))
-print(len(time_sst[i_sst_high]))
+
 ship_10s = sst[i_sst_low]
 time_10s = time_sst[i_sst_low]
 ship_90s = sst[i_sst_high]
