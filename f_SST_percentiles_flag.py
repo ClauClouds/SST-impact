@@ -89,6 +89,7 @@ perc_90th = np.percentile(sst, 90.)
 tsg_perc_10th = np.nanpercentile(temp_merqctsg, 10.)
 tsg_perc_90th = np.nanpercentile(temp_merqctsg, 90.)
 
+print(tsg_perc_10th, tsg_perc_90th)
 
 # finding indeces of sst values smaller than sst_perc_low and sst_perc_high
 i_sst_low = np.where(sst < perc_10th)[0]
