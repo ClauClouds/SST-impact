@@ -273,8 +273,18 @@ for ind_file in range(n_soundings):
     #print(EIS[ind_file])
     #print('EIS obtained from the Wood and Bretherton formula:')
     
+# saving theta_v to ncdf for calculation with arthus raman lidar in NCDF
+dims           = ['time','height']
+coords         = {"time":data_swap.launch_time.values, "height":data_swap.alt.values}
+theta_v           = xr.DataArray(dims=dims, coords=coords, data=theta_v_matrix,
+                 attrs={'long_name':'Virtual potential temperature',
+                        'units':'K'})
+variables         = {'theta_v':theta_v}
+Theta_v_RS      = xr.Dataset(data_vars = variables,
+                       coords = coords)
+Theta_v_RS.to_netcdf(path_out+'theta_v_RS.nc')
 
-
+STRASUKA
 # +
 # reading cloud base time series from ceilometer atalante
 #ceilofiles = np.sort(glob.glob('/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/ceilometer_atalante/*_000.nc'))
