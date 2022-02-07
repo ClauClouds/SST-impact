@@ -200,4 +200,4 @@ global_attributes = {'created_by':'Claudia Acquistapace',
 sst_flag_dataset      = xr.Dataset(data_vars = variables,
                               coords = coords_tsg,
                               attrs = global_attributes)
-sst_flag_dataset.to_netcdf(path_out+string_out+'_sst_flag'+perc_string+'_perc.nc')
+#sst_flag_dataset.to_netcdf(path_out+string_out+'_sst_flag'+perc_string+'_perc.nc')
