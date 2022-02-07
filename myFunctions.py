@@ -13,6 +13,29 @@ import datetime
 import atmos
 import matplotlib.dates as mdates
 
+# definition of a function to calculate the uncertainty propagation
+def f_uncertainty_prop(data, sigma_o, n_days, n_sigma, varstring):
+    
+    ''' function to propagate the uncertainty in the measurement and calculate the non-significative bins)
+    inputs:
+    - data: xarray dataset of data to be plotted
+    - sigma_o: initial uncertainty in the data to be provided 
+    - n_days: number of days used for the computation of the diurnal cycle
+    - n_sigma: number of sigma chosen to check whether the measurement is different than zero.
+    - varstring: string identifying the variable name
+    outputs: 
+    - result : xarray with values smaller than n_sigma*sigma_shf_final masked ''' 
+    
+    # calculation of the uncertainty propagation
+    da_sigma_final = sigma_o*np.sqrt(1+1/n_days)/np.sqrt(data[varstring+'_n'])
+    sigma_final = da_sigma_final.values
+
+    # masking the dataset
+    data_m = np.ma.masked_where(np.abs(data[varstring].values)>n_sigma*sigma_final,data[varstring].values)
+    
+    return(data_m)
+
+
 
 
 #"""
