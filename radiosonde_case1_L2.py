@@ -284,6 +284,34 @@ Theta_v_RS      = xr.Dataset(data_vars = variables,
                        coords = coords)
 Theta_v_RS.to_netcdf(path_out+'theta_v_RS.nc')
 
+
+    
+# saving all variables to ncdf 
+dims           = ['time','height']
+coords         = {"time":data_swap.launch_time.values, "height":data_swap.alt.values}
+theta_v        = xr.DataArray(dims=dims, coords=coords, data=theta_v_matrix,
+                 attrs={'long_name':'Virtual potential temperature',
+                        'units':'K'})
+pblh           = xr.DataArray(dims=['time'], coords={"time":data_swap.launch_time.values}, data=PBLheight,
+                 attrs={'long_name':'Boundary layer height',
+                        'units':'m'})
+lcl            = xr.DataArray(dims=['time'], coords={"time":data_swap.launch_time.values}, data=z_lcl,
+                 attrs={'long_name':'lcl calculated with RS data',
+                        'units':'m'})
+lts            = xr.DataArray(dims=['time'], coords={"time":data_swap.launch_time.values}, data=LTS,
+                 attrs={'long_name':'lts calculated with RS data',
+                        'units':'m'})
+eis            = xr.DataArray(dims=['time'], coords={"time":data_swap.launch_time.values}, data=EIS,
+                 attrs={'long_name':'eis calculated with RS data',
+                        'units':'m'})
+variables_rs         = {'theta_v':theta_v,
+                    'pblh':pblh,
+                    'lts':lts,
+                    'lcl':lcl,
+                    'eis':eis}
+dataset_RS      = xr.Dataset(data_vars = variables_rs,
+                       coords = coords)
+dataset_RS.to_netcdf(path_out+'thermodyn_properties_RS.nc')
 STRASUKA
 # +
 # reading cloud base time series from ceilometer atalante
