@@ -84,6 +84,7 @@ temp_merqctsg[np.isnan(temp0)] = temp1[np.isnan(temp0)]
 # ccalculating 10th percentile for ship sst
 perc_10th = np.percentile(sst, 10.)
 perc_90th = np.percentile(sst, 90.)
+print(perc_10th, perc_90th)
 
 # ccalculating 10th percentile for tsg sst
 tsg_perc_10th = np.nanpercentile(temp_merqctsg, 10.)
