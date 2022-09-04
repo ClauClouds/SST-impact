@@ -312,7 +312,7 @@ variables_rs         = {'theta_v':theta_v,
 dataset_RS      = xr.Dataset(data_vars = variables_rs,
                        coords = coords)
 dataset_RS.to_netcdf(path_out+'thermodyn_properties_RS.nc')
-STRASUKA
+
 # +
 # reading cloud base time series from ceilometer atalante
 #ceilofiles = np.sort(glob.glob('/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/ceilometer_atalante/*_000.nc'))
@@ -882,7 +882,6 @@ binned_sst
 # +
 print(binned_sst)
 #generate data arrays for boxplots of scalar quantities
-
 def f_generate_list_binned_var(var_list, var_name_string):
     output_list = []
     n_elements_list = len(var_list)
