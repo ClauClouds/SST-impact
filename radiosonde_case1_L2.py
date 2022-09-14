@@ -66,9 +66,25 @@ end = sounding_id[ind[-1]]
 data_meteo_sel = data_RS_meteo.sel(sounding=slice(start, end))
 
 
+# reading RS merian
+data_RS_vaisala_MM = xr.open_dataset(file_list_RS[2])
+
+# read time of the launch for all radiosondes
+time_launch_mm = pd.to_datetime(data_RS_vaisala_MM.launch_time.values)
+sounding_id_mm = data_RS_vaisala_MM.sounding.values
+
+# find indeces for the cold patch
+ind_mm = np.where((time_launch_mm > datetime(2020,2,2,0,0,0)) * (time_launch_mm < datetime(2020,2,3,23,59,59)))[0]
+start_mm = sounding_id_mm[ind_mm[0]]
+end_mm = sounding_id_mm[ind_mm[-1]]
+
+# selecting data_RS
+data_vaisala_mm_sel = data_RS_vaisala_MM.sel(sounding=slice(start_mm, end_mm))
+print('n rs vaisala mm', len(data_vaisala_mm_sel))
+
 # +
 # merging the two selected datasets
-data_patch = xr.merge([data_vaisala_sel, data_meteo_sel])
+data_patch = xr.merge([data_vaisala_sel, data_meteo_sel, data_vaisala_mm_sel])
 
 
 # re-ordering files in temporal order
@@ -789,7 +805,7 @@ variables         = {'lts':LTS_index,
 RS_atalante_Data      = xr.Dataset(data_vars = variables,
                        coords = coords)
 RS_atalante_Data_new = RS_atalante_Data.reindex(sst=sorted(RS_atalante_Data.sst.values))
-RS_atalante_Data_new.to_netcdf(path_out+'radiosondes_atalante_binned_sst.nc')
+RS_atalante_Data_new.to_netcdf(path_out+'radiosondes_atalante_merian_binned_sst.nc')
 
 
 #RS_atalante_Data_new.pressure.plot()
