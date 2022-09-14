@@ -30,7 +30,7 @@ import matplotlib.ticker as ticker
 
 # reading radiosondes
 path_RS = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/radiosondes_atalante/case_1/'
-file_list_RS = [path_RS+'EUREC4A_Atalante_Vaisala-RS_L2_v3.0.0.nc', path_RS+'EUREC4A_Atalante_Meteomodem-RS_L2_v3.0.0.nc']
+file_list_RS = [path_RS+'EUREC4A_Atalante_Vaisala-RS_L2_v3.0.0.nc', path_RS+'EUREC4A_Atalante_Meteomodem-RS_L2_v3.0.0.nc', path_RS+'EUREC4A_MS-Merian_Vaisala-RS_L2_v3.0.0.nc']
 path_out = '/Volumes/Extreme SSD/work/006_projects/001_Prec_Trade_Cycle/post_processed_data/'
 # +
 # read radiosonde from vaisala
